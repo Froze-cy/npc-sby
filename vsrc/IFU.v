@@ -26,7 +26,6 @@ module IFU
 ////////////////////////////状态机/////////////////////////////
 localparam IDLE = 2'd0, INST_SEND = 2'd1, WAIT_PC = 2'd2;
 reg [1:0] curr_state   ;
-reg       pc_addr_valid;
 reg       inst_valid   ;
 
 always @(posedge clk or negedge rst_n)begin

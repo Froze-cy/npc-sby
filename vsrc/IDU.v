@@ -1,42 +1,40 @@
 module IDU
 (
-    input  wire        clk        ,
-    input  wire        rst_n      ,    
+    input  wire        clk           ,
+    input  wire        rst_n         ,    
     //IFU	
-    input  wire [31:0] inst       ,
-    input  wire [31:0] curr_pc    ,
+    input  wire [31:0] inst          ,
+    input  wire [31:0] curr_pc       ,
     //IFU_IDU 握手
-    input  wire        if_id_valid,
-    output reg         if_id_ready, 
+    input  wire        if_id_valid   ,
+    output reg         if_id_ready   , 
     //registers
-    output wire [4:0]  rs1_addr   ,
-    output wire [4:0]  rs2_addr   , 
-    output wire [4:0]  rd_wr_addr ,
+    output wire [4:0]  rs1_addr      ,
+    output wire [4:0]  rs2_addr      , 
+    output wire [4:0]  rd_wr_addr    ,
     //EXU
-    output reg  [31:0] imm        ,
-    output reg  [5:0]  alu_op     ,
-    output reg         idu_reg_we ,
-    output reg         mem_we     ,
-    output reg         mem_re     ,
-    output reg  [1:0]  byte_type  ,
-    output reg         sign_type  ,
-    output reg         break_flag ,
-    output reg         ecall_flag ,
-    output reg         mret_flag  ,  
-    output wire [11:0] csr_addr   , 
-    output reg         csr_wr_flag,
-    output reg         load_flag  ,
-    output reg  [31:0] idu_curr_pc,     
+    output reg  [31:0] imm           ,
+    output reg  [5:0]  alu_op        ,
+    output reg         idu_reg_we    ,
+    output reg         idu_mem_wen   ,  
+    output reg  [3:0]  idu_mem_wmask ,
+    output reg         idu_mem_ren   , 
+    output reg  [3:0]  idu_mem_rmask ,
+    output reg         sign_type     ,
+    output reg         break_flag    ,
+    output reg         ecall_flag    ,
+    output reg         mret_flag     ,  
+    output wire [11:0] csr_addr      , 
+    output reg         csr_wr_flag   ,
+    output reg         load_flag     ,
+    output reg  [31:0] idu_curr_pc   ,     
     //IDU_EXU IDU_CSR 握手
-    input  wire        exu_ready  ,
-    output reg         idu_valid  ,
-    output wire        jump_flag  ,
-    output wire        trap_flag  ,
+    input  wire        exu_ready     ,
+    output reg         idu_valid     ,
+    output wire        jump_flag     ,
+    output wire        trap_flag     ,
     output wire        lsu_flag    
 );
-
-import "DPI-C" function void goodtrap_dpi();
-import "DPI-C" function void badtrap_dpi();
 
 ////////////////////////////状态机//////////////////////////////
 localparam  IDLE = 2'd0, SEND = 2'd1;
@@ -134,32 +132,34 @@ end
 //控制信号
 always @(*)begin
 
-    alu_op     = 6'b0 ;
-    mem_we     = 1'b0 ;
-    mem_re     = 1'b0 ;
-    idu_reg_we = 1'b0 ;
-    byte_type  = 2'b0 ;  //2'b0:lw 2'b1:lb 2'b10:lh
-    sign_type  = 1'b0 ;
-    load_flag  = 1'b0 ;
-    break_flag = 1'b0 ;
-    ecall_flag = 1'b0 ;
-    csr_wr_flag= 1'b0 ;
-    mret_flag  = 1'b0 ;
-    
+    alu_op        = 6'b0 ;
+    idu_reg_we    = 1'b0 ;
+    sign_type     = 1'b0 ;
+    load_flag     = 1'b0 ;
+    break_flag    = 1'b0 ;
+    ecall_flag    = 1'b0 ;
+    csr_wr_flag   = 1'b0 ;
+    mret_flag     = 1'b0 ;
+    idu_mem_wen   = 1'b0 ; 
+    idu_mem_wmask = 4'b0 ;
+    idu_mem_ren   = 1'b0 ;
+    idu_mem_rmask = 4'b0 ;
+
     case (opcode)
     //R-type
     7'b0110011:begin
-	idu_reg_we = 1'b1 ;
-        mem_we     = 1'b0 ;
-        mem_re     = 1'b0 ;
-	byte_type  = 2'b0 ;
-        sign_type  = 1'b0 ;
-	load_flag  = 1'b0 ;
-	ecall_flag = 1'b0 ;
-        csr_wr_flag= 1'b0 ;
-	mret_flag  = 1'b0 ;
-	break_flag = 1'b0 ;        
-        case(funct3)
+	idu_reg_we    = 1'b1 ;
+        sign_type     = 1'b0 ;
+	load_flag     = 1'b0 ;
+	ecall_flag    = 1'b0 ;
+        csr_wr_flag   = 1'b0 ;
+	mret_flag     = 1'b0 ;
+	break_flag    = 1'b0 ;        
+        idu_mem_wen   = 1'b0 ;
+        idu_mem_wmask = 4'b0 ;
+        idu_mem_ren   = 1'b0 ;
+        idu_mem_rmask = 4'b0 ;
+	case(funct3)
 	 3'h0:begin
 	     if(funct7==7'h0) 
                alu_op = 6'd0 ;  //add
@@ -184,16 +184,17 @@ always @(*)begin
       end
     //I-type
     7'b0010011:begin   
-               idu_reg_we = 1'b1 ;
-	       mem_we     = 1'b0 ;
-               mem_re     = 1'b0 ;
-               byte_type  = 2'b0 ;
-               sign_type  = 1'b0 ;
-	       load_flag  = 1'b0 ;
-               ecall_flag = 1'b0 ;
-	       csr_wr_flag= 1'b0 ;
-	       mret_flag  = 1'b0 ;
-	       break_flag = 1'b0 ;	
+               idu_reg_we    = 1'b1 ;
+               sign_type     = 1'b0 ;
+	       load_flag     = 1'b0 ;
+               ecall_flag    = 1'b0 ;
+	       csr_wr_flag   = 1'b0 ;
+	       mret_flag     = 1'b0 ;
+	       break_flag    = 1'b0 ;
+               idu_mem_wen   = 1'b0 ;
+               idu_mem_wmask = 4'b0 ;
+               idu_mem_ren   = 1'b0 ;
+               idu_mem_rmask = 4'b0 ;
            case(funct3)  
                3'h0:alu_op  = 6'd9 ;  //addi
 	       3'h1:alu_op  = 6'd10;  //slli 
@@ -215,146 +216,152 @@ always @(*)begin
          end
     //lui
     7'b0110111:begin
-                alu_op     = 6'd15;
-		idu_reg_we = 1'b1 ;
-                mem_we     = 1'b0 ;
-                mem_re     = 1'b0 ;
-                byte_type  = 2'b0 ;
-        	sign_type  = 1'b0 ;
-		load_flag  = 1'b0 ;
-                break_flag = 1'b0 ;       
-	        csr_wr_flag= 1'b0 ;
-	       	mret_flag  = 1'b0 ;
-		ecall_flag = 1'b0 ;
+                alu_op        = 6'd15;
+		idu_reg_we    = 1'b1 ;
+        	sign_type     = 1'b0 ;
+		load_flag     = 1'b0 ;
+                break_flag    = 1'b0 ;       
+	        csr_wr_flag   = 1'b0 ;
+	       	mret_flag     = 1'b0 ;
+		ecall_flag    = 1'b0 ;
+                idu_mem_wen   = 1'b0 ;
+                idu_mem_wmask = 4'b0 ;
+                idu_mem_ren   = 1'b0 ;
+                idu_mem_rmask = 4'b0 ;
 	        end
     //auipc
     7'b0010111:begin
-                alu_op     = 6'd16;
-		idu_reg_we = 1'b1 ;
-                mem_we     = 1'b0 ;
-                mem_re     = 1'b0 ;
-                byte_type  = 2'b0 ;
-        	sign_type  = 1'b0 ;
-		load_flag  = 1'b0 ;
-                break_flag = 1'b0 ; 
-                csr_wr_flag= 1'b0 ;
-	        mret_flag  = 1'b0 ;
-		ecall_flag = 1'b0 ;
+                alu_op        = 6'd16;
+		idu_reg_we    = 1'b1 ;
+        	sign_type     = 1'b0 ;
+		load_flag     = 1'b0 ;
+                break_flag    = 1'b0 ; 
+                csr_wr_flag   = 1'b0 ;
+	        mret_flag     = 1'b0 ;
+		ecall_flag    = 1'b0 ;
+                idu_mem_wen   = 1'b0 ;
+                idu_mem_wmask = 4'b0 ;
+                idu_mem_ren   = 1'b0 ;
+                idu_mem_rmask = 4'b0 ;
 	        end
     //I-type		
     7'b0000011:begin
-	idu_reg_we = 1'b1 ;
-        mem_we     = 1'b0 ;
-        mem_re     = 1'b1 ;
-        load_flag  = 1'b1 ;
-        break_flag = 1'b0 ;	
-	csr_wr_flag= 1'b0 ;
-	mret_flag  = 1'b0 ;
-	ecall_flag = 1'b0 ;
+	    idu_reg_we    = 1'b1 ;
+            load_flag     = 1'b1 ;
+            break_flag    = 1'b0 ;	
+	    csr_wr_flag   = 1'b0 ;
+	    mret_flag     = 1'b0 ;
+	    ecall_flag    = 1'b0 ;
+            idu_mem_wen   = 1'b0 ;
+            idu_mem_wmask = 4'b0 ;
+            idu_mem_ren   = 1'b1 ;
 	case(funct3)
           3'h0:begin //lb 
-	        alu_op     = 6'd17;
-                byte_type  = 2'b1 ;
-	        sign_type  = 1'b1 ;
+	        alu_op        = 6'd17   ;
+                idu_mem_rmask = 4'b0001 ;
+       	        sign_type     = 1'b1    ;
 	       end
           3'h1:begin //lh 
-	        alu_op     = 6'd33;
-                byte_type  = 2'b10;
-	        sign_type  = 1'b1 ;
+	        alu_op        = 6'd33   ;
+                idu_mem_rmask = 4'b0011 ;
+		sign_type     = 1'b1    ;
 	       end
 	
      	  3'h2:begin //lw 
-	        alu_op     = 6'd18;
-                byte_type  = 2'b0 ;
-	        sign_type  = 1'b0 ;
+	        alu_op        = 6'd18   ;
+                idu_mem_rmask = 4'b1111 ;
+               	sign_type     = 1'b0    ;
 	       end
 	  3'h4:begin //lbu
-                alu_op     = 6'd19;
-                byte_type  = 2'b1 ;
-	        sign_type  = 1'b0 ;
+                alu_op        = 6'd19   ;
+                idu_mem_rmask = 4'b0001 ;
+               	sign_type     = 1'b0    ;
 	       end
 	  3'h5:begin //lhu 
-	        alu_op     = 6'd34;
-                byte_type  = 2'b10;
-	        sign_type  = 1'b0 ;
+	        alu_op        = 6'd34   ;
+                idu_mem_rmask = 4'b0011 ;
+               	sign_type     = 1'b0    ;
 	       end
 	     
           default:begin
-                alu_op     = 6'd17;
-                byte_type  = 2'b1 ;
-	        sign_type  = 1'b1 ;
+                alu_op        = 6'd17   ;
+                idu_mem_rmask = 4'b0001 ;
+               	sign_type     = 1'b1    ;
 	       end		  
           endcase	               
       end
     //S-type
     7'b0100011:begin
-	    idu_reg_we = 1'b0 ;
-            mem_we     = 1'b1 ;
-            mem_re     = 1'b0 ;
-       	    load_flag  = 1'b0 ;
-            ecall_flag = 1'b0 ;
-	    csr_wr_flag= 1'b0 ;
-	    mret_flag  = 1'b0 ;
-	    break_flag = 1'b0 ;	 
- 	    case(funct3)
+	    idu_reg_we    = 1'b0 ;
+      	    load_flag     = 1'b0 ;
+            ecall_flag    = 1'b0 ;
+	    csr_wr_flag   = 1'b0 ;
+	    mret_flag     = 1'b0 ;
+	    break_flag    = 1'b0 ;	 
+ 	    idu_mem_wen   = 1'b1 ;
+            idu_mem_rmask = 4'b0 ;
+            idu_mem_ren   = 1'b0 ; 
+	    case(funct3)
 	     3'h0:begin //sb		    
-                   alu_op     = 6'd20;
-                   byte_type  = 2'b1 ;
-	           sign_type  = 1'b1 ;    
+                   alu_op        = 6'd20   ;
+	           idu_mem_wmask = 4'b0001 ;
+		   sign_type     = 1'b1    ;    
 	          end
              3'h1:begin //sh
-                   alu_op     = 6'd35;
-                   byte_type  = 2'b10;
-	           sign_type  = 1'b1 ;
+                   alu_op        = 6'd35   ;
+                   idu_mem_wmask = 4'b0011 ;
+       	           sign_type     = 1'b1    ;
 	          end	     
              3'h2:begin //sw
-                   alu_op     = 6'd21;
-                   byte_type  = 2'b0 ;
-	           sign_type  = 1'b0 ;
+                   alu_op        = 6'd21   ;
+                   idu_mem_wmask = 4'b1111 ;
+        	   sign_type     = 1'b0    ;
 	          end
 	     default:begin
-                   alu_op     = 6'd21;
-                   byte_type  = 2'b0 ;
-	           sign_type  = 1'b0 ;
+                   alu_op        = 6'd21   ;
+                   idu_mem_rmask = 4'b1111 ;
+                   sign_type     = 1'b0    ;
 	          end
              endcase		
-	   end
+      end
      //jal
      7'b1101111:begin
-               alu_op     = 6'd22;
-	       idu_reg_we = 1'b1 ;
-               mem_we     = 1'b0 ;
-               mem_re     = 1'b0 ;
-               byte_type  = 2'b0 ;
-               sign_type  = 1'b0 ;	       
-               load_flag  = 1'b0 ;
-               break_flag = 1'b0 ;
-               csr_wr_flag= 1'b0 ; 
-	       mret_flag  = 1'b0 ;
-	       ecall_flag = 1'b0 ;
-               end
-    
+               alu_op        = 6'd22;
+	       idu_reg_we    = 1'b1 ;
+               sign_type     = 1'b0 ;	       
+               load_flag     = 1'b0 ;
+               break_flag    = 1'b0 ;
+               csr_wr_flag   = 1'b0 ; 
+	       mret_flag     = 1'b0 ;
+	       ecall_flag    = 1'b0 ;
+               idu_mem_wen   = 1'b0 ;
+               idu_mem_wmask = 4'b0 ;
+               idu_mem_ren   = 1'b0 ;
+               idu_mem_rmask = 4'b0 ;
+       end 
      //jalr
      7'b1100111:begin
-               alu_op     = 6'd23;
-	       idu_reg_we = 1'b1 ;
-               mem_we     = 1'b0 ;
-               mem_re     = 1'b0 ;
-               byte_type  = 2'b0 ;
-               sign_type  = 1'b0 ;	       
-               load_flag  = 1'b0 ;
-               csr_wr_flag= 1'b0 ;
-	       break_flag = 1'b0 ;	
-               mret_flag  = 1'b0 ; 
-	       ecall_flag = 1'b0 ;
-               end
-     //csrrs csrrw  
-     7'b1110011:begin             
-           mem_we     = 1'b0 ;
-           mem_re     = 1'b0 ;
-           byte_type  = 2'b0 ;
-           sign_type  = 1'b0 ;	       
-	   load_flag  = 1'b0 ;
+               alu_op        = 6'd23;
+	       idu_reg_we    = 1'b1 ;
+               sign_type     = 1'b0 ;	       
+               load_flag     = 1'b0 ;
+               csr_wr_flag   = 1'b0 ;
+	       break_flag    = 1'b0 ;	
+               mret_flag     = 1'b0 ; 
+	       ecall_flag    = 1'b0 ;
+               idu_mem_wen   = 1'b0 ;
+               idu_mem_wmask = 4'b0 ;
+               idu_mem_ren   = 1'b0 ;
+               idu_mem_rmask = 4'b0 ;
+        end
+      //csrrs csrrw  
+      7'b1110011:begin             
+           sign_type     = 1'b0 ;	       
+	   load_flag     = 1'b0 ;
+           idu_mem_wen   = 1'b0 ;
+           idu_mem_wmask = 4'b0 ;
+           idu_mem_ren   = 1'b0 ;
+           idu_mem_rmask = 4'b0 ;
 	   case(funct3)
                 3'b0:
 		    case(inst_reg[31:20])
@@ -438,17 +445,17 @@ always @(*)begin
       end
    //B-type
    7'b1100011: begin
-	 idu_reg_we = 1'b0 ;
-         mem_we     = 1'b0 ;
-         mem_re     = 1'b0 ;
-         byte_type  = 2'b0 ;
-         sign_type  = 1'b0 ;	       
-         load_flag  = 1'b0 ;
-	 break_flag = 1'b0 ;          
-         csr_wr_flag= 1'b0 ; 
-         mret_flag  = 1'b0 ;
-         ecall_flag = 1'b0 ;
-  
+	 idu_reg_we    = 1'b0 ;
+         sign_type     = 1'b0 ;	       
+         load_flag     = 1'b0 ;
+	 break_flag    = 1'b0 ;          
+         csr_wr_flag   = 1'b0 ; 
+         mret_flag     = 1'b0 ;
+         ecall_flag    = 1'b0 ;
+         idu_mem_wen   = 1'b0 ;
+         idu_mem_wmask = 4'b0 ;
+         idu_mem_ren   = 1'b0 ;
+         idu_mem_rmask = 4'b0 ;
 	 case(funct3)  
 	     3'h0: alu_op = 6'd25; //beq
              3'h1: alu_op = 6'd26; //bne
@@ -460,17 +467,18 @@ always @(*)begin
 	 endcase
        end    
   default:begin  
-            alu_op     = 6'd0 ;
-	    idu_reg_we = 1'b0 ;
-            mem_we     = 1'b0 ;
-            mem_re     = 1'b0 ;
-            byte_type  = 2'b0 ;
-            sign_type  = 1'b0 ;	       
-            load_flag  = 1'b0 ;
-	    break_flag = 1'b0 ;
-            csr_wr_flag= 1'b0 ; 
-            mret_flag  = 1'b0 ;
-            ecall_flag = 1'b0 ;
+            alu_op        = 6'd0 ;
+	    idu_reg_we    = 1'b0 ;
+            sign_type     = 1'b0 ;	       
+            load_flag     = 1'b0 ;
+	    break_flag    = 1'b0 ;
+            csr_wr_flag   = 1'b0 ; 
+            mret_flag     = 1'b0 ;
+            ecall_flag    = 1'b0 ;
+            idu_mem_wen   = 1'b0 ;      
+            idu_mem_wmask = 4'b0 ;      
+            idu_mem_ren   = 1'b0 ;      
+            idu_mem_rmask = 4'b0 ;      
         end
   endcase
 end

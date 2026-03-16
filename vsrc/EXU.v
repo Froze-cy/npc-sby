@@ -3,12 +3,15 @@ module EXU
     input  wire        clk            ,
     input  wire        rst_n          ,  
     output reg         exu_done       ,   
-    //IDU
+    //EXU<-->IDU
     input  wire [5:0]  idu_alu_op     ,
     input  wire [31:0] idu_imm        ,
-    input  wire        idu_mem_we     ,  
-    input  wire        idu_mem_re     ,   
-    input  wire        idu_sign_type  , 
+    input  wire        idu_mem_wen    ,
+    input  wire [3:0]  idu_mem_wmask  ,
+    input  wire        idu_mem_ren    ,
+    input  wire [3:0]  idu_mem_rmask  ,   
+    input  wire        idu_sign_type  ,
+    input  wire        idu_load_flag  , 
     input  wire        idu_reg_we     ,
     input  wire [4:0]  idu_rd_addr    ,
     input  wire        idu_break_flag ,    
@@ -23,12 +26,12 @@ module EXU
     //IDU_EXU 握手
     input  wire        idu_valid      ,
     output  reg        exu_ready      ,	    
-    //IFU
+    //EXU<-->IFU
     output  reg [31:0] jump_pc        ,
     //EXU_IFU 握手
     input  wire        pc_ready       ,
     output  reg        jump_valid     ,	    
-    //LSU 
+    //EXU<-->LSU 
     output  reg        exu_sign_type  ,   
     output  reg [31:0] exu_mem_waddr  ,
     output wire [31:0] exu_mem_wdata  ,
@@ -40,10 +43,10 @@ module EXU
     //EXU_LSU 握手
     input  wire        ex_ls_ready    , 
     output  reg        ex_ls_valid    ,	    
-    //registers
+    //EXU<-->registers
     input  wire [31:0] rs1            ,
     input  wire [31:0] rs2            ,  
-    //csr_registers 
+    //EXU<-->csr_registers 
     input  wire [31:0] csr_rd         ,  
     output  reg [31:0] csr_wr         , 
     output  reg        exu_break_flag ,
@@ -55,8 +58,9 @@ module EXU
     //EXU_CSR 握手
     output  reg        ex_csr_valid   ,
     input  wire        ex_csr_ready   ,
-    //WBU
+    //EXU<-->WBU
     output  reg        exu_reg_done   ,
+    output  reg        exu_load_flag  ,	    
     output  reg [31:0] exu_rd_wr      ,
     output  reg [4:0]  exu_rd_addr    ,
     output  reg        exu_reg_we     
@@ -236,14 +240,13 @@ always @(posedge clk or negedge rst_n)begin
              exu_csr_wr_flag <= 1'b0 ;
              exu_csr_addr    <= 12'b0;
 	     exu_reg_we      <= 1'b0 ;
+	     exu_load_flag   <= 1'b0 ;
              exu_rd_addr     <= 5'b0 ;
              exu_sign_type   <= 1'b0 ; 
              exu_mem_wen     <= 1'b0 ;
              exu_mem_wmask   <= 4'b0 ;
              exu_mem_ren     <= 1'b0 ;
              exu_mem_rmask   <= 4'b0 ;
-
-
         end
 	else if(idu_valid&&exu_ready)begin
              imm_reg         <= idu_imm   ;
@@ -255,7 +258,8 @@ always @(posedge clk or negedge rst_n)begin
              exu_mret_flag   <= idu_mret_flag;
 	     exu_curr_pc     <= idu_curr_pc;
              exu_csr_wr_flag <= idu_csr_wr_flag;        
-	     exu_csr_addr    <= idu_csr_addr; 
+	     exu_csr_addr    <= idu_csr_addr;
+	     exu_load_flag   <= idu_load_flag; 
 	     exu_reg_we      <= idu_reg_we;  
              exu_rd_addr     <= idu_rd_addr;
              exu_sign_type   <= idu_sign_type;

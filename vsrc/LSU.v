@@ -11,6 +11,7 @@ module LSU
    output  reg         mem_ren        ,
    output  reg  [3:0]  mem_rmask      , 
    input   wire [31:0] mem_rdata      ,
+   input   wire [3:0]  rdata_offset   ,
    //EXU<-->LSU
    input   wire        ex_ls_valid    ,
    output  reg         ex_ls_ready    ,
@@ -99,10 +100,10 @@ end
 
 
 always @(*)begin
-   if(mem_ren&&mem_rmask==4'b1111)
+   if(mem_ren&&rdata_offset==4'b1111)
            lsu_mem_data = mem_rdata;  //lw
    else if(!mem_sign_type&&mem_ren) begin  //lbu lhu
-        case (mem_rmask)
+        case (rdata_offset)
             4'b0001: lsu_mem_rdata = {24'b0, mem_rdata[7:0]};
             4'b0010: lsu_mem_rdata = {24'b0, mem_rdata[15:8]};
             4'b0100: lsu_mem_rdata = {24'b0, mem_rdata[23:16]};
@@ -113,7 +114,7 @@ always @(*)begin
         endcase
    end
    else if(mem_sign_type&&mem_ren)begin//lb lh
-         case (mem_rmask)
+         case (rdata_offset)
             4'b0001: lsu_mem_rdata = {{24{mem_rdata[7]}}, mem_rdata[7:0]};
             4'b0010: lsu_mem_rdata = {{24{mem_rdata[15]}}, mem_rdata[15:8]};
             4'b0100: lsu_mem_rdata = {{24{mem_rdata[23]}}, mem_rdata[23:16]};

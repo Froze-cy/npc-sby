@@ -1,18 +1,14 @@
 module top
 (
-    input  wire        clk            ,
-    input  wire        rst_n          , 
-    output wire [31:0] curr_pc        ,
-    output wire [31:0] inst           ,
+    input  wire        clk         ,
+    input  wire        rst_n       , 
+    output wire [31:0] curr_pc     ,
+    output wire [31:0] inst        ,
     //debug
-    input  wire [4:0]  debug_addr     ,
-    output wire [31:0] debug_reg      ,
-    output wire        good_trap      ,
-    output wire        bad_trap       ,
-    output wire        mem_re         ,
-    output wire        mem_we         ,
-    output wire [31:0] exu_mem_rd_addr,
-    output wire [31:0] exu_mem_wr_addr,     
+    input  wire [4:0]  debug_addr  ,
+    output wire [31:0] debug_reg   ,
+    output wire        good_trap   ,
+    output wire        bad_trap    , 
     output reg         diff_flag 
 );
 
@@ -24,28 +20,33 @@ import "DPI-C" function void pmem_write(input int waddr,input int wdata,input by
 //IFU
 wire        if_id_valid    ;
 wire        pc_ready       ;
+wire        pc_addr_valid  ;
+wire [31:0] pc_addr        ;
 
 //IDU
 wire        if_id_ready    ;
 wire        idu_valid      ;
 wire [4:0]  idu_rs1_addr   ;
 wire [4:0]  idu_rs2_addr   ;
-wire [4:0]  rd_wr_addr     ;  
-wire [31:0] imm            ;
-wire [5:0]  alu_op         ;
+wire [4:0]  idu_rd_wr_addr ;  
+wire [31:0] idu_imm        ;
+wire [5:0]  idu_alu_op     ;
 wire        idu_reg_we     ;
-wire [1:0]  byte_type      ;
-wire        sign_type      ;
-wire        load_flag      ;
-wire        ecall_flag     ;
-wire        mret_flag      ;
-wire        break_flag     ;
-wire        jump_flag      ;
-wire        trap_flag      ;
-wire        lsu_flag       ;
+wire        idu_sign_type  ;
+wire        idu_load_flag  ;
+wire        idu_ecall_flag ;
+wire        idu_mret_flag  ;
+wire        idu_break_flag ;
+wire        idu_jump_flag  ;
+wire        idu_trap_flag  ;
+wire        idu_lsu_flag   ;
 wire [31:0] idu_curr_pc    ;
 wire [11:0] idu_csr_addr   ;
 wire        idu_csr_wr_flag;
+wire        idu_mem_wen    ;
+wire [3:0]  idu_mem_wmask  ;
+wire        idu_mem_ren    ;
+wire [3:0]  idu_mem_rmask  ;
 
 //EXU
 wire        exu_done       ;
@@ -56,10 +57,6 @@ wire        ex_csr_valid   ;
 wire        ex_ls_valid    ;
 wire        exu_ready      ; 
 wire [31:0] exu_rs2        ;
-wire        exu_mem_we     ; 
-wire        exu_mem_re     ;
-wire [1:0]  exu_byte_type  ;
-wire        exu_sign_type  ;
 wire        exu_break_flag ;
 wire        exu_ecall_flag ; 
 wire        exu_mret_flag  ; 
@@ -71,11 +68,26 @@ wire [11:0] exu_csr_addr   ;
 wire [31:0] exu_curr_pc    ;
 wire [31:0] exu_rd_wr      ;
 wire [31:0] csr_wr         ;
+wire        exu_sign_type  ;
+wire [31:0] exu_mem_waddr  ;  
+wire [31:0] exu_mem_wdata  ;
+wire        exu_mem_wen    ;
+wire [3:0]  exu_mem_wmask  ;
+wire [31:0] exu_mem_raddr  ;
+wire        exu_mem_ren    ;
+wire [3:0]  exu_mem_rmask  ;
 
 //LSU
 wire        ex_ls_ready    ;
-wire [31:0] lsu_load_data  ;
+wire [31:0] lsu_load_rdata ;
 wire        lsu_data_valid ;
+wire [31:0] mem_waddr      ;      
+wire [31:0] mem_wdata      ;
+wire        mem_wen        ;
+wire [3:0]  mem_wmask      ;
+wire [31:0] mem_raddr      ;
+wire        mem_ren        ;
+wire [3:0]  mem_rmask      ;
 
 //WBU
 wire [31:0] wbu_wr_data    ;
@@ -93,6 +105,11 @@ wire        trap_valid     ;
 wire [31:0] trap_pc        ;
 wire        ex_csr_ready   ;
 wire [31:0] csr_rd         ;
+
+//memory
+wire [31:0] mem_inst       ;
+wire [31:0] mem_rdata      ;
+wire [3:0]  rdata_offset   ;
 
 /////////////////////////////////////////////////////////////
 reg jump_valid_reg;
@@ -119,56 +136,60 @@ end
 /////////////////////////////////////////////////////////////
 IFU  IFU_inst
 (
-.clk         (clk         ) ,
-.rst_n       (rst_n       ) ,
-.pc_ready    (pc_ready    ) ,
-.jump_valid  (jump_valid  ) ,
-.trap_valid  (trap_valid  ) ,
-.exu_done    (exu_done    ) ,
-.if_id_valid (if_id_valid ) ,
-.if_id_ready (if_id_ready ) ,
-.jump_pc     (jump_pc     ) ,
-.trap_pc     (trap_pc     ) ,
-.curr_pc     (curr_pc     ) ,    
-.inst        (inst        )
+.clk          (clk           ) ,
+.rst_n        (rst_n         ) ,
+.pc_addr_valid(pc_addr_valid ) ,
+.pc_addr      (pc_addr       ) ,
+.mem_inst     (mem_inst      ) ,
+.pc_ready     (pc_ready      ) ,
+.jump_valid   (jump_valid    ) ,
+.trap_valid   (trap_valid    ) ,
+.exu_done     (exu_done      ) ,
+.if_id_valid  (if_id_valid   ) ,
+.if_id_ready  (if_id_ready   ) ,
+.jump_pc      (jump_pc       ) ,
+.trap_pc      (trap_pc       ) ,
+.curr_pc      (curr_pc       ) ,    
+.inst         (inst          )
 );
 
 
 /////////////////////////////////////////////////////////////
 IDU IDU_inst
 (
-.clk        (clk            ) ,
-.rst_n      (rst_n          ) ,
-//IFU<-->IDU
-.if_id_ready(if_id_ready    ) ,
-.inst       (inst           ) ,
-.if_id_valid(if_id_valid    ) ,
-.curr_pc    (curr_pc        ) ,
+.clk           (clk            ) ,
+.rst_n         (rst_n          ) ,
+//IFU<-->IDU   
+.if_id_ready   (if_id_ready    ) ,
+.inst          (inst           ) ,
+.if_id_valid   (if_id_valid    ) ,
+.curr_pc       (curr_pc        ) ,
 //IDU<-->register
-.rs1_addr   (idu_rs1_addr   ) ,
-.rs2_addr   (idu_rs2_addr   ) , 
-//IDU<-->EXU
-.imm        (imm            ) ,
-.idu_valid  (idu_valid      ) ,
-.exu_ready  (exu_ready      ) ,
-.alu_op     (alu_op         ) ,   
-.mem_we     (mem_we         ) ,
-.mem_re     (mem_re         ) ,
-.idu_reg_we (idu_reg_we     ) ,
-.rd_wr_addr (rd_wr_addr     ) ,
-.byte_type  (byte_type      ) ,
-.sign_type  (sign_type      ) ,
-.load_flag  (load_flag      ) ,
-.jump_flag  (jump_flag      ) ,
-.trap_flag  (trap_flag      ) ,
-.lsu_flag   (lsu_flag       ) ,
-.idu_curr_pc(idu_curr_pc    ) ,
-.ecall_flag (ecall_flag     ) ,
-.mret_flag  (mret_flag      ) ,
-.break_flag (break_flag     ) ,
+.rs1_addr      (idu_rs1_addr   ) ,
+.rs2_addr      (idu_rs2_addr   ) , 
+//IDU<-->EXU   
+.imm           (idu_imm        ) ,
+.idu_valid     (idu_valid      ) ,
+.exu_ready     (exu_ready      ) ,
+.alu_op        (idu_alu_op     ) ,   
+.idu_reg_we    (idu_reg_we     ) ,
+.rd_wr_addr    (idu_rd_wr_addr ) ,
+.sign_type     (idu_sign_type  ) ,
+.load_flag     (idu_load_flag  ) ,
+.jump_flag     (idu_jump_flag  ) ,
+.trap_flag     (idu_trap_flag  ) ,
+.lsu_flag      (idu_lsu_flag   ) ,
+.idu_curr_pc   (idu_curr_pc    ) ,
+.ecall_flag    (idu_ecall_flag ) ,
+.mret_flag     (idu_mret_flag  ) ,
+.break_flag    (idu_break_flag ) ,
+.idu_mem_wen   (idu_mem_wen    ) , 
+.idu_mem_wmask (idu_mem_wmask  ) ,
+.idu_mem_ren   (idu_mem_ren    ) ,
+.idu_mem_rmask (idu_mem_rmask  ) ,
 //IDU<-->csr_register
-.csr_addr   (idu_csr_addr   ) ,
-.csr_wr_flag(idu_csr_wr_flag) 
+.csr_addr      (idu_csr_addr   ) ,
+.csr_wr_flag   (idu_csr_wr_flag) 
 );
 
 
@@ -185,24 +206,25 @@ EXU EXU_inst
 //IDU<-->EXU
 .idu_valid      (idu_valid      ) ,
 .exu_ready      (exu_ready      ) ,
-.idu_alu_op     (alu_op         ) ,
-.idu_imm        (imm            ) ,
+.idu_alu_op     (idu_alu_op     ) ,
+.idu_imm        (idu_imm        ) ,
 .idu_curr_pc    (idu_curr_pc    ) , 
-.idu_mem_we     (mem_we         ) ,
-.idu_mem_re     (mem_re         ) ,
-.idu_byte_type  (byte_type      ) ,
-.idu_sign_type  (sign_type      ) ,
+.idu_mem_wen    (idu_mem_wen    ) ,   
+.idu_mem_wmask  (idu_mem_wmask  ) ,
+.idu_mem_ren    (idu_mem_ren    ) ,
+.idu_mem_rmask  (idu_mem_rmask  ) ,
+.idu_sign_type  (idu_sign_type  ) ,
 .idu_reg_we     (idu_reg_we     ) ,
-.idu_rd_addr    (rd_wr_addr     ) ,
-.idu_load_flag  (load_flag      ) ,
-.idu_break_flag (break_flag     ) , 
-.idu_ecall_flag (ecall_flag     ) ,
-.idu_mret_flag  (mret_flag      ) ,
+.idu_rd_addr    (idu_rd_wr_addr ) ,
+.idu_load_flag  (idu_load_flag  ) ,
+.idu_break_flag (idu_break_flag ) , 
+.idu_ecall_flag (idu_ecall_flag ) ,
+.idu_mret_flag  (idu_mret_flag  ) ,
 .idu_csr_addr   (idu_csr_addr   ) ,
 .idu_csr_wr_flag(idu_csr_wr_flag) ,
-.jump_flag      (jump_flag      ) ,
-.trap_flag      (trap_flag      ) ,
-.lsu_flag       (lsu_flag       ) ,
+.jump_flag      (idu_jump_flag  ) ,
+.trap_flag      (idu_trap_flag  ) ,
+.lsu_flag       (idu_lsu_flag   ) ,
 //EXU<-->CSR
 .ex_csr_valid   (ex_csr_valid   ) ,
 .ex_csr_ready   (ex_csr_ready   ) ,
@@ -217,45 +239,55 @@ EXU EXU_inst
 //EXU<-->LSU
 .ex_ls_valid    (ex_ls_valid    ) ,
 .ex_ls_ready    (ex_ls_ready    ) ,
-.exu_mem_wr_addr(exu_mem_wr_addr) ,
-.exu_mem_rd_addr(exu_mem_rd_addr) ,
-.exu_rs2        (exu_rs2        ) ,
-.exu_mem_we     (exu_mem_we     ) , 
-.exu_mem_re     (exu_mem_re     ) , 
-.exu_byte_type  (exu_byte_type  ) ,
 .exu_sign_type  (exu_sign_type  ) ,
+.exu_mem_waddr  (exu_mem_waddr  ) ,
+.exu_mem_wdata  (exu_mem_wdata  ) ,
+.exu_mem_wen    (exu_mem_wen    ) ,
+.exu_mem_wmask  (exu_mem_wmask  ) ,
+.exu_mem_raddr  (exu_mem_raddr  ) ,
+.exu_mem_ren    (exu_mem_ren    ) ,
+.exu_mem_rmask  (exu_mem_rmask  ) ,
 //EXU<-->WBU
 .exu_reg_done   (exu_reg_done   ) ,
 .exu_reg_we     (exu_reg_we     ) ,
 .exu_rd_addr    (exu_rd_addr    ) ,
 .exu_rd_wr      (exu_rd_wr      ) , 
 .exu_load_flag  (exu_load_flag  ) ,
-//EXU<-->regis  ter
+//EXU<-->register
 .rs1            (rs1            ) ,
 .rs2            (rs2            ) 
 );
 
-
 /////////////////////////////////////////////////////////////
 LSU LSU_inst
 (
-.clk           (clk            ) ,
-.rst_n         (rst_n          ) ,
-//EXU<-->LSU
-.ex_ls_valid   (ex_ls_valid    ) ,
-.ex_ls_ready   (ex_ls_ready    ) ,
-.exu_mem_we    (exu_mem_we     ) , 
-.exu_mem_re    (exu_mem_re     ) , 
-.exu_byte_type (exu_byte_type  ) ,
-.exu_sign_type (exu_sign_type  ) ,
-.store_data    (exu_rs2        ) ,
-.store_addr    (exu_mem_wr_addr) ,
-.load_addr     (exu_mem_rd_addr) ,
-//LSU-->WBU
-.lsu_load_data (lsu_load_data  ) ,
-.lsu_data_valid(lsu_data_valid ) 	
+.clk           (clk           ) ,
+.rst_n         (rst_n         ) ,
+//LSU<-->memory
+.mem_waddr     (mem_waddr     ) ,
+.mem_wdata     (mem_wdata     ) ,
+.mem_wen       (mem_wen       ) ,
+.mem_wmask     (mem_wmask     ) ,
+.mem_raddr     (mem_raddr     ) ,
+.mem_ren       (mem_ren       ) ,
+.mem_rmask     (mem_rmask     ) , 
+.mem_rdata     (mem_rdata     ) ,
+.rdata_offset  (rdata_offset  ) ,
+//LSU<-->EXU
+.ex_ls_valid   (ex_ls_valid   ) ,
+.ex_ls_ready   (ex_ls_ready   ) ,
+.exu_sign_type (exu_sign_type ) ,
+.exu_mem_waddr (exu_mem_waddr ) ,
+.exu_mem_wdata (exu_mem_wdata ) ,
+.exu_mem_wen   (exu_mem_wen   ) ,
+.exu_mem_wmask (exu_mem_wmask ) ,
+.exu_mem_raddr (exu_mem_raddr ) ,
+.exu_mem_ren   (exu_mem_ren   ) ,
+.exu_mem_rmask (exu_mem_rmask ) ,
+//LSU<-->WBU
+.lsu_load_rdata(lsu_load_rdata) ,
+.lsu_data_valid(lsu_data_valid)
 );
-
 
 /////////////////////////////////////////////////////////////
 WBU WBU_inst
@@ -287,7 +319,7 @@ regfile regfile_inst
 .debug_reg   (debug_reg   )
 );
 
-////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////
 csr_regfile csr_regfile_inst
 (
 .clk         (clk            ),  
@@ -307,6 +339,31 @@ csr_regfile csr_regfile_inst
 .curr_pc     (exu_curr_pc    ), 
 .csr_wr      (csr_wr         ),
 .csr_rd      (csr_rd         )
+);
+
+/////////////////////////////////////////////////////////////
+memory memory_inst
+#(
+.MEM_WIDTH (8 ),
+.MEM_DEPTH (16)  
+)
+(
+.clk            (clk           ),
+.rst_n          (rst_n         ),  
+//memory<-->IFU
+.pc_addr_valid  (pc_addr_valid ),
+.pc_addr        (pc_addr       ),   
+.mem_inst       (mem_inst      ),
+//memory<-->LSU
+.mem_waddr      (mem_waddr     ),
+.mem_wdata      (mem_wdata     ),
+.mem_wen        (mem_wen       ),
+.mem_wmask      (mem_wmask     ),   
+.mem_raddr      (mem_raddr     ),
+.mem_ren        (mem_ren       ),
+.mem_rmask      (mem_rmask     ),
+.mem_rdata      (mem_rdata     ),
+.rdata_offset   (rdata_offset  )
 );
 
 

@@ -5,7 +5,7 @@ module WBU
     input  wire [4:0]  exu_rd_addr    ,
     input  wire        exu_reg_we     ,
     input  wire        exu_load_flag  ,
-    input  wire [31:0] lsu_load_data  ,
+    input  wire [31:0] lsu_load_rdata ,
     input  wire        lsu_data_valid , 
     output wire [31:0] wbu_wr_data    ,   
     output wire        wbu_we         ,
@@ -14,7 +14,7 @@ module WBU
 
 
 assign wbu_we      = exu_load_flag?lsu_data_valid:(exu_reg_we&exu_reg_done);
-assign wbu_wr_data = exu_load_flag?lsu_load_data:exu_rd_wr;
+assign wbu_wr_data = exu_load_flag?lsu_load_rdata:exu_rd_wr;
 assign wbu_wr_addr = exu_rd_addr;
 
 
