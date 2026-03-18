@@ -16,7 +16,7 @@
 
 #define SERIAL_ADDR    0x10000000   //串口地址
 #define RTC_ADDR_LO    0x10000004   //实时时钟地址
-#define RTC_ADDR_HI    0x10000008  
+#define RTC_ADDR_HI    0x10000008
 #define UPTIME_ADDR_LO 0x10000010
 #define UPTIME_ADDR_HI 0x10000014
 
@@ -29,7 +29,7 @@ struct CPU_state {
 
 // 方向常量（与 NEMU 的 difftest-def.h 保持一致）
 #ifndef DIFFTEST_TO_REF
-#define DIFFTEST_TO_REF 1 
+#define DIFFTEST_TO_REF 1
 #define DIFFTEST_TO_DUT 0
 #endif
 
@@ -126,65 +126,65 @@ void load_image(const char* filename,uint32_t base = 0x80000000){
 
 //DPI-C pmem_read
 extern "C" int pmem_read(int raddr){
-         
-       	uint32_t addr = (uint32_t)raddr;
+
+        uint32_t addr = (uint32_t)raddr;
        //获取当前时间
         struct timespec ts;
-	uint64_t us;
+        uint64_t us;
         //处理UPTIME低32位
         if(addr == UPTIME_ADDR_LO){
-	  
+
          clock_gettime(CLOCK_MONOTONIC,&ts);
-	 us = ts.tv_sec * 1000000ULL + ts.tv_nsec / 1000 ;
+         us = ts.tv_sec * 1000000ULL + ts.tv_nsec / 1000 ;
          return 0;
-	 //返回低32位
-	 //return (int)(us & 0xFFFFFFFF);
-	}
+         //返回低32位
+         //return (int)(us & 0xFFFFFFFF);
+        }
         //处理UPTIME高32位
         if(addr == UPTIME_ADDR_HI){
-	 clock_gettime(CLOCK_MONOTONIC,&ts);
-	 us = ts.tv_sec * 1000000ULL + ts.tv_nsec / 1000 ;
-    	 return 0;
-	 //返回高32位
-	 //return (int)(us >> 32);      
-	}
+         clock_gettime(CLOCK_MONOTONIC,&ts);
+         us = ts.tv_sec * 1000000ULL + ts.tv_nsec / 1000 ;
+         return 0;
+         //返回高32位
+         //return (int)(us >> 32);
+        }
         //处理RTC低32位
         if(addr == RTC_ADDR_LO){
-	  
+
          clock_gettime(CLOCK_REALTIME,&ts);
-	 us = ts.tv_sec * 1000000ULL + ts.tv_nsec / 1000 ;
+         us = ts.tv_sec * 1000000ULL + ts.tv_nsec / 1000 ;
          return 0;
-	 //返回低32位
-	 //return (int)(us & 0xFFFFFFFF);
-	}
+         //返回低32位
+         //return (int)(us & 0xFFFFFFFF);
+        }
         //处理RTC高32位
         if(addr == RTC_ADDR_HI){
 
-	 clock_gettime(CLOCK_REALTIME,&ts);
-	 us = ts.tv_sec * 1000000ULL + ts.tv_nsec / 1000 ;
+         clock_gettime(CLOCK_REALTIME,&ts);
+         us = ts.tv_sec * 1000000ULL + ts.tv_nsec / 1000 ;
          return 0;
-	 //返回高32位
-	 //return (int)(us >> 32);      
-	}
+         //返回高32位
+         //return (int)(us >> 32);
+        }
 
 
         //物理地址 = raddr & ~0x3u （总是4字节对齐）
         uint32_t paddr = addr & ~0x3u;
-	if(addr>=0x80000000&&addr<(0x80000000+sizeof(pmem))){
-	   uint32_t offset = paddr - 0x80000000;
-	   uint32_t val = *(uint32_t*)&pmem[offset];
- 
-	   return val;
+        if(addr>=0x80000000&&addr<(0x80000000+sizeof(pmem))){
+           uint32_t offset = paddr - 0x80000000;
+           uint32_t val = *(uint32_t*)&pmem[offset];
 
-	}
+           return val;
+
+        }
         else {
-	/*   if(paddr !=0 ){
-	       printf("ERROR: pmem_read out of range: 0x%08x, PC = 0x%08x, inst = 0x%08x\n",paddr,current_pc,curr_inst);
-	   
-	   }*/
-	
-	return 0;
-	}
+        /*   if(paddr !=0 ){
+               printf("ERROR: pmem_read out of range: 0x%08x, PC = 0x%08x, inst = 0x%08x\n",paddr,current_pc,curr_inst);
+
+           }*/
+
+        return 0;
+        }
 }
 /*
 //DPI-C pmem_write
@@ -211,7 +211,7 @@ extern "C" void pmem_write(int waddr, int wdata, char wmask) {
         uint32_t new_val = old;
         for (int i = 0; i < 4; i++) {
             if (wmask & (1 << i)) {
-	//new_val = (new_val & ~(0xFF << (i*8))) | ((wdata >> (i*8)) & 0xFF) << (i*8);
+        //new_val = (new_val & ~(0xFF << (i*8))) | ((wdata >> (i*8)) & 0xFF) << (i*8);
             uint8_t byte;
             //判断是 sw (wmask 全1) 还是 sb (只有一位为1)
             if (wmask == 0xF) { // sw：使用 wdata 的对应字节
@@ -219,8 +219,8 @@ extern "C" void pmem_write(int waddr, int wdata, char wmask) {
             } else { // sb：始终使用 wdata 的低 8 位
                     byte = (uint8_t)(wdata & 0xFF);
             }
-              new_val = (new_val & ~(0xFF << (i*8))) | (byte << (i*8));       
-	    }
+              new_val = (new_val & ~(0xFF << (i*8))) | (byte << (i*8));
+            }
         }
         *word = new_val;
     }
@@ -232,7 +232,7 @@ extern "C" void pmem_write(int waddr, int wdata, char wmask) {
         for (int i = 0; i < 4; i++) {
             if (wmask & (1 << i)) {
                 char c = (char)(wdata >> (i * 8));
-                //printf("[NPC] putchar '%c' (0x%02x) at cycle %d\n", c, c, cycle); 
+                //printf("[NPC] putchar '%c' (0x%02x) at cycle %d\n", c, c, cycle);
                 putchar(c); // 串口输出仍按原方式（因为串口写通常字节）
                 fflush(stdout);
             }
@@ -325,7 +325,7 @@ int main(int argc, char** argv) {
       Verilated::commandArgs(argc,argv);
       if(argc < 2){
          printf("Usage: %s <binary file>\n",argv[0]);
-	 return 1;
+         return 1;
       }
       //解析命令行参数：获取镜像文件名和可选的 --diff 参数和--trace 参数
       const char *image_file = NULL;
@@ -372,7 +372,7 @@ int main(int argc, char** argv) {
    } else {
         printf("DiffTest disabled (no --diff given).\n");
         difftest_enabled = false;
-     } 
+     }
     //根据trace_enabled决定是否启用波形
     if (trace_enabled) {
         Verilated::traceEverOn(true);
@@ -383,16 +383,16 @@ int main(int argc, char** argv) {
     }
     else {
         tfp = nullptr;
-    }    
+    }
     //绑定引脚
     //nvboard_bind_all_pins(&dut);
 
     //初始化
     //nvboard_init();
 
-   
+
     //加载程序到内存
-    load_image(argv[1],0x80000000); 
+    load_image(argv[1],0x80000000);
 
     //复位
     reset(5);
@@ -412,20 +412,20 @@ int main(int argc, char** argv) {
 
     uint32_t prev_pc = dut.curr_pc;
     int same_pc_count= 0;
-    //int cycle = 0; 
+    //int cycle = 0;
     vluint64_t sim_time = 0;
     uint32_t last_pc = 0;
-    uint32_t last_inst = 0;    
-    
+    uint32_t last_inst = 0;
+
     while(!Verilated::gotFinish()){
         //保存当前指令作为上一条
         last_pc = dut.curr_pc;
         last_inst = dut.inst;
 
-	single_cycle();
+        single_cycle();
         current_pc = dut.curr_pc ;
-	curr_inst  = dut.inst    ;
-	global_a0  = get_debug_reg(10);
+        curr_inst  = dut.inst    ;
+        global_a0  = get_debug_reg(10);
         cycle++;
         //检测trap信号
         if (dut.good_trap) {       // 假设顶层输出信号名为 goodtrap
@@ -437,14 +437,14 @@ int main(int argc, char** argv) {
         break;
       }
        // if (trap_hit) break;   // 触发 ebreak 后立即退出循环
-        static uint32_t last_s0 = 0,last_s1 = 0,last_x15 = 0; 
+        static uint32_t last_s0 = 0,last_s1 = 0,last_x15 = 0;
         uint32_t s0 = get_debug_reg(8);
         uint32_t s1 = get_debug_reg(9);
         uint32_t x15 = get_debug_reg(15);
-     
+
      if (difftest_enabled) {
 
-        if(dut.diff_flag) {		
+        if(dut.diff_flag) {
             // 获取 NPC 当前寄存器状态
             for (int i = 0; i < 32; i++) {
                 npc_state.gpr[i] = get_debug_reg(i);
@@ -474,10 +474,10 @@ int main(int argc, char** argv) {
                 }
             }
             if (mismatch) {
-		printf("Previous instruction: PC=0x%08x, instruction=0x%08x\n", last_pc, last_inst);
+                printf("Previous instruction: PC=0x%08x, instruction=0x%08x\n", last_pc, last_inst);
                 printf("Current instruction: PC=0x%08x, instruction=0x%08x\n", dut.curr_pc, dut.inst);
 
-        	exit_code = 1;
+                exit_code = 1;
                 break;   // 停止仿真
             }
          }
@@ -495,11 +495,11 @@ int main(int argc, char** argv) {
         } else {
             same_pc_count = 0;
             prev_pc = dut.curr_pc;
-        }	
+        }
       /* if(cycle > 1000000){
           printf("\n\033[1;33mTimeout after %d cycles\033[0m\n",cycle);
-	  exit_code = 1;
-	  break;
+          exit_code = 1;
+          break;
       }*/
    }
 
@@ -508,32 +508,32 @@ int main(int argc, char** argv) {
      tfp->close();
      delete tfp;
    }
-   //仿真结束，关闭动态库  
+   //仿真结束，关闭动态库
    if (nemu_handle) dlclose(nemu_handle);
- 
+
    //最终状态
    printf("\n=====================================================\n");
    printf("Total cycles: %d\n", cycle);
    printf("PC: 0x%08x\n",dut.curr_pc);
    printf("Instruction: 0x%08x \n",dut.inst);
    printf("\n Final register values: \n");
-   
+
    for(int i = 0; i < 32;i++){
       uint32_t val = get_reg_direct(i);
       if(val!=0){
          printf("x%02d = 0x%08x \n",i,val);
       }
    }
-    
- 
+
+
  /*  while(1){
-     
+
      nvboard_update();
 
      single_cycle();
 
-    }*/ 
-   
+    }*/
+
     return exit_code;
-   
+
 }

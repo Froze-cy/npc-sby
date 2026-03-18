@@ -1,21 +1,38 @@
+`timescale 1ns/1ps
+
 module top
 (
-    input  wire        clk         ,
-    input  wire        rst_n       , 
-    output wire [31:0] curr_pc     ,
-    output wire [31:0] inst        ,
+    input  wire        clk             ,
+    input  wire        rst_n           , 
+    output wire [31:0] curr_pc         ,
+    output wire [31:0] inst            ,
     //debug
-    input  wire [4:0]  debug_addr  ,
-    output wire [31:0] debug_reg   ,
-    output wire        good_trap   ,
-    output wire        bad_trap    , 
-    output reg         diff_flag 
+    input  wire [4:0]  debug_addr      ,
+    output wire [31:0] debug_reg       ,
+    output wire        good_trap       ,
+    output wire        bad_trap        , 
+    output reg         diff_flag       ,
+    //RVFI
+    output wire        rvfi_valid      ,
+    output reg  [63:0] rvfi_order      ,
+    output wire [31:0] rvfi_insn       ,
+    output wire        rvfi_trap       ,
+    output wire [1:0]  rvfi_mode       ,
+    output wire [1:0]  rvfi_ixl        ,  
+    output wire [4:0]  rvfi_rs1_addr   ,
+    output wire [4:0]  rvfi_rs2_addr   ,
+    output wire [31:0] rvfi_rs1_data   ,
+    output wire [31:0] rvfi_rs2_data   ,
+    output wire [4:0]  rvfi_rd_addr    ,
+    output wire [31:0] rvfi_rd_wdata   ,
+    output wire [31:0] rvfi_pc_rdata   ,
+    output wire [31:0] rvfi_pc_wdata   ,
+    output wire [31:0] rvfi_mem_addr   ,
+    output wire [3:0]  rvfi_mem_rmask  ,
+    output wire [3:0]  rvfi_mem_wmask  ,
+    output wire [31:0] rvfi_mem_rdata  ,
+    output wire [31:0] rvfi_mem_wdata     
 );
-
-import "DPI-C" function void goodtrap_dpi();
-import "DPI-C" function void badtrap_dpi();
-import "DPI-C" function int pmem_read(input int raddr);
-import "DPI-C" function void pmem_write(input int waddr,input int wdata,input byte wmask);
 
 //IFU
 wire        if_id_valid    ;
@@ -56,7 +73,6 @@ wire [31:0] jump_pc        ;
 wire        ex_csr_valid   ;
 wire        ex_ls_valid    ;
 wire        exu_ready      ; 
-wire [31:0] exu_rs2        ;
 wire        exu_break_flag ;
 wire        exu_ecall_flag ; 
 wire        exu_mret_flag  ; 
@@ -79,7 +95,7 @@ wire [3:0]  exu_mem_rmask  ;
 
 //LSU
 wire        ex_ls_ready    ;
-wire [31:0] lsu_load_rdata ;
+wire [31:0] lsu_mem_rdata  ;
 wire        lsu_data_valid ;
 wire [31:0] mem_waddr      ;      
 wire [31:0] mem_wdata      ;
@@ -285,7 +301,7 @@ LSU LSU_inst
 .exu_mem_ren   (exu_mem_ren   ) ,
 .exu_mem_rmask (exu_mem_rmask ) ,
 //LSU<-->WBU
-.lsu_load_rdata(lsu_load_rdata) ,
+.lsu_mem_rdata (lsu_mem_rdata ) ,
 .lsu_data_valid(lsu_data_valid)
 );
 
@@ -297,7 +313,7 @@ WBU WBU_inst
 .exu_rd_wr     (exu_rd_wr     ) ,   
 .exu_reg_we    (exu_reg_we    ) ,
 .exu_rd_addr   (exu_rd_addr   ) ,
-.lsu_load_data (lsu_load_data ) ,
+.lsu_mem_rdata (lsu_mem_rdata ) ,
 .lsu_data_valid(lsu_data_valid) ,
 .wbu_wr_data   (wbu_wr_data   ) , 
 .wbu_we        (wbu_we        ) ,
@@ -342,11 +358,12 @@ csr_regfile csr_regfile_inst
 );
 
 /////////////////////////////////////////////////////////////
-memory memory_inst
+memory 
 #(
 .MEM_WIDTH (8 ),
 .MEM_DEPTH (16)  
 )
+memory_inst
 (
 .clk            (clk           ),
 .rst_n          (rst_n         ),  

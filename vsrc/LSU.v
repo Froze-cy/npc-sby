@@ -24,7 +24,7 @@ module LSU
    input   wire        exu_mem_ren    ,
    input   wire [3:0]  exu_mem_rmask  ,
    //LSU<-->WBU
-   output  reg  [31:0] lsu_load_rdata ,
+   output  reg  [31:0] lsu_mem_rdata  ,
    output  reg         lsu_data_valid
 );
 
@@ -101,7 +101,7 @@ end
 
 always @(*)begin
    if(mem_ren&&rdata_offset==4'b1111)
-           lsu_mem_data = mem_rdata;  //lw
+           lsu_mem_rdata = mem_rdata;  //lw
    else if(!mem_sign_type&&mem_ren) begin  //lbu lhu
         case (rdata_offset)
             4'b0001: lsu_mem_rdata = {24'b0, mem_rdata[7:0]};

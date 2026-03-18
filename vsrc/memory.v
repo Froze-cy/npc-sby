@@ -25,14 +25,14 @@ module memory
 localparam IMEM_START = 16'h0, IMEM_END = 16'h3FFF;
 localparam DMEM_START = 16'h4000, DMEM_END = 16'h7FFF;
 
-reg [MEM_WIDTH-1:0] memory [0:1<<MEM_DEPTH-1];
+reg [MEM_WIDTH-1:0] memory [0:(1<<MEM_DEPTH)-1] /*verilator public_flat_rw*/;
 
-integer i;
+/*integer i;
 initial begin
   $readmemh("/home/froze/ysyx-workbench/npc-sby/vsrc/test.hex",memory);
   for (i=0;i<10;i=i+1)
    $display("IMEM[%0d]=0x%08x",i,memory[i]);
-end
+end*/
 
 
 //imem 0000H~3FFFH
@@ -41,7 +41,7 @@ wire [15:0] imem_addr = pc_addr[15:0];
 always @(posedge clk or negedge rst_n)begin
    if(!rst_n)
 	   mem_inst <= 32'b0;
-   else if(pc_addr_valid&&imem_addr>(IMEM_END-3))
+   else if(pc_addr_valid&&(imem_addr+3)>IMEM_END)
 	   mem_inst <= 32'b0;
    else if(pc_addr_valid)
 	   mem_inst <= {memory[imem_addr+3],memory[imem_addr+2],memory[imem_addr+1],memory[imem_addr]};

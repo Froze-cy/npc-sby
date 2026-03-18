@@ -382,7 +382,6 @@ always @(*)begin
 		                csr_wr_flag= 1'b0 ;
 				mret_flag  = 1'b0 ;	
 				alu_op     = 6'd24;
-		                //goodtrap_dpi();
 		              end
 		        12'h2:begin  //bad trap 
                                 idu_reg_we = 1'b0 ;
@@ -391,7 +390,6 @@ always @(*)begin
 		                csr_wr_flag= 1'b0 ;
 				mret_flag  = 1'b0 ;
 				alu_op     = 6'd24;
-		                //badtrap_dpi();
 		              end
 		      12'h302:begin  //mret
                                 idu_reg_we = 1'b0 ;
@@ -407,8 +405,7 @@ always @(*)begin
 			        ecall_flag = 1'b0 ;
 			        csr_wr_flag= 1'b0 ;
 				mret_flag  = 1'b0 ;
-				alu_op     = 6'd24;
-			        //badtrap_dpi();	               
+				alu_op     = 6'd24;	               
 		              end		  
 	             endcase
 		 //csrrw
@@ -439,7 +436,6 @@ always @(*)begin
 		      csr_wr_flag  = 1'b0 ; 
 		      mret_flag    = 1'b0 ; 
 		      alu_op       = 6'd24;
-	              //badtrap_dpi();
 	             end
 	    endcase
       end

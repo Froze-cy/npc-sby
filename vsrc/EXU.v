@@ -106,7 +106,7 @@ always @(posedge clk or negedge rst_n)begin
 		           ex_csr_valid<= 1'b0;
 		           jump_valid  <= 1'b1;
 			   exu_done    <= 1'b0;
-			   exu_reg_done<= 1'b0; 
+			   exu_reg_done<= 1'b1; 
 		      end
 		      else if(idu_valid&&lsu_flag)begin
 			   curr_state  <= LSU_SEND;
@@ -144,7 +144,7 @@ always @(posedge clk or negedge rst_n)begin
                            ex_csr_valid<= 1'b0;
                            jump_valid  <= 1'b0;
 			   exu_done    <= 1'b0; 
-                           exu_reg_done<= 1'b1; 
+                           exu_reg_done<= 1'b0; 
 		      end
 		      else begin
 			   curr_state  <= JUMP;   
