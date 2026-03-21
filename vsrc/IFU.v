@@ -89,7 +89,7 @@ always @(posedge clk or negedge rst_n)begin
      endcase    
 end
 ////////////////////////////////////////////////////////////////
-reg  [31:0]  pc          ;
+reg  [31:0]  pc ;
 
 always @(posedge clk or negedge rst_n)begin
         if(!rst_n)
@@ -112,7 +112,8 @@ always @(posedge clk or negedge rst_n)begin
 end
 
 assign curr_pc = pc;
-assign pc_addr = {pc[31:2],2'b0};
+//assign pc_addr = {pc[31:2],2'b0};
+assign pc_addr = pc;
 assign inst    = mem_inst;
 
 /*

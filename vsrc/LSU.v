@@ -89,10 +89,16 @@ always @(posedge clk or negedge rst_n)begin
            mem_ren       <= exu_mem_ren  ;
            mem_rmask     <= exu_mem_rmask;
      end
-     else if(curr_state==WAIT)begin
-         mem_wen       <= 1'b0;
-         mem_ren       <= 1'b0;
-	 mem_load_flag <= 1'b0;
+     else if(curr_state==WAIT)begin 
+	   mem_load_flag <= 1'b0 ;
+           mem_wmask     <= 4'b0 ;
+	   mem_waddr     <= 32'b0; 
+           mem_wdata     <= 32'b0;
+           mem_wen       <= 1'b0 ;
+           mem_wmask     <= 4'b0 ;
+           mem_raddr     <= 32'b0;
+           mem_ren       <= 1'b0 ;
+           mem_rmask     <= 4'b0 ;
      end
 end
 

@@ -2,9 +2,13 @@ module EXU
 (   
     input  wire        clk            ,
     input  wire        rst_n          ,  
-    output reg         exu_done       ,   
+    output  reg        exu_done       ,  
+    output  reg [31:0] exu_rs1        ,
+    output  reg [31:0] exu_rs2        ,
+    output wire        jump_exce      ,
     //EXU<-->IDU
     input  wire [5:0]  idu_alu_op     ,
+    input  wire [4:0]  idu_zimm       ,
     input  wire [31:0] idu_imm        ,
     input  wire        idu_mem_wen    ,
     input  wire [3:0]  idu_mem_wmask  ,
@@ -20,6 +24,7 @@ module EXU
     input  wire [31:0] idu_curr_pc    ,
     input  wire [11:0] idu_csr_addr   ,
     input  wire        idu_csr_wr_flag,
+    input  wire        idu_csr_rd_flag,
     input  wire        jump_flag      ,
     input  wire        trap_flag      ,
     input  wire        lsu_flag       ,
@@ -34,7 +39,7 @@ module EXU
     //EXU<-->LSU 
     output  reg        exu_sign_type  ,   
     output  reg [31:0] exu_mem_waddr  ,
-    output wire [31:0] exu_mem_wdata  ,
+    output  reg [31:0] exu_mem_wdata  ,
     output  reg        exu_mem_wen    ,
     output  reg [3:0]  exu_mem_wmask  , 
     output  reg [31:0] exu_mem_raddr  ,
@@ -48,11 +53,14 @@ module EXU
     input  wire [31:0] rs2            ,  
     //EXU<-->csr_registers 
     input  wire [31:0] csr_rd         ,  
-    output  reg [31:0] csr_wr         , 
+    output  reg [31:0] csr_wr         ,
+    output  reg [2:0]  exu_csr_op     , 
+    output  reg [31:0] exu_zimm       ,
     output  reg        exu_break_flag ,
     output  reg        exu_ecall_flag ,
     output  reg        exu_mret_flag  ,
     output  reg        exu_csr_wr_flag,
+    output  reg        exu_csr_rd_flag,
     output  reg [11:0] exu_csr_addr   ,
     output  reg [31:0] exu_curr_pc    ,
     //EXU_CSR 握手
@@ -75,8 +83,7 @@ localparam LSU_SEND = 3'd3, LSU_WAIT = 3'd4, ALU_SEND = 3'd5;
 reg [2:0]  curr_state;
 reg [31:0] imm_reg;
 reg [5:0]  alu_op_reg;
-reg [31:0] exu_rs1;
-reg [31:0] exu_rs2; 
+
 
 always @(posedge clk or negedge rst_n)begin
 	if(!rst_n)begin
@@ -230,15 +237,17 @@ end
 always @(posedge clk or negedge rst_n)begin
 	if(!rst_n)begin
              imm_reg         <= 32'b0;
-             alu_op_reg      <= 6'b0 ;
-             exu_rs1         <= 32'b0;
+	     alu_op_reg      <= 6'b0 ;
+             exu_zimm        <= 32'b0;
+	     exu_rs1         <= 32'b0;
              exu_rs2         <= 32'b0; 
              exu_break_flag  <= 1'b0 ;
              exu_ecall_flag  <= 1'b0 ;
              exu_mret_flag   <= 1'b0 ; 
 	     exu_curr_pc     <= 32'b0;
              exu_csr_wr_flag <= 1'b0 ;
-             exu_csr_addr    <= 12'b0;
+             exu_csr_rd_flag <= 1'b0 ;
+	     exu_csr_addr    <= 12'b0;
 	     exu_reg_we      <= 1'b0 ;
 	     exu_load_flag   <= 1'b0 ;
              exu_rd_addr     <= 5'b0 ;
@@ -249,15 +258,17 @@ always @(posedge clk or negedge rst_n)begin
              exu_mem_rmask   <= 4'b0 ;
         end
 	else if(idu_valid&&exu_ready)begin
-             imm_reg         <= idu_imm   ;
+             imm_reg         <= idu_imm   ; 
 	     alu_op_reg      <= idu_alu_op;
+	     exu_zimm        <= {27'b0,idu_zimm};
 	     exu_rs1         <= rs1;
 	     exu_rs2         <= rs2; 
 	     exu_break_flag  <= idu_break_flag;
              exu_ecall_flag  <= idu_ecall_flag;
              exu_mret_flag   <= idu_mret_flag;
 	     exu_curr_pc     <= idu_curr_pc;
-             exu_csr_wr_flag <= idu_csr_wr_flag;        
+             exu_csr_wr_flag <= idu_csr_wr_flag;
+             exu_csr_rd_flag <= idu_csr_rd_flag;	     
 	     exu_csr_addr    <= idu_csr_addr;
 	     exu_load_flag   <= idu_load_flag; 
 	     exu_reg_we      <= idu_reg_we;  
@@ -270,19 +281,48 @@ always @(posedge clk or negedge rst_n)begin
        end
 end
 
-assign  exu_mem_wdata = exu_rs2;
-
 
 /////////////////////////////////////////////////////////////////////////
 
 reg system_flag;
 
-always @(*) begin
+assign jump_exce = (jump_pc[1:0]!=2'b0) ? 1'b1 : 1'b0;
 
-   exu_rd_wr     = 32'h0;
-   csr_wr        = 32'h0;
-   exu_mem_waddr = 32'h0;
-   exu_mem_raddr = 32'h0;
+always @(*) begin
+      if(alu_op_reg==6'd20)  //sb
+	   exu_mem_wdata = {24'b0,exu_rs2[7:0]};
+      else if(alu_op_reg==6'd35) //sh
+	   exu_mem_wdata = {16'b0,exu_rs2[15:0]};
+      else if(alu_op_reg==6'd21) //sw
+	   exu_mem_wdata = exu_rs2;   
+      else
+           exu_mem_wdata = 32'b0;	      
+end
+
+always @(*)begin
+      if(alu_op_reg==6'd38)  //csrrw
+	   exu_csr_op = 3'd0;
+      else if(alu_op_reg==6'd39) //csrrs
+	   exu_csr_op = 3'd1;   
+      else if(alu_op_reg==6'd42) //csrrwi
+	   exu_csr_op = 3'd2;   
+      else if(alu_op_reg==6'd43) //csrrsi
+ 	   exu_csr_op = 3'd3;   
+      else if(alu_op_reg==6'd44)
+	   exu_csr_op = 3'd4;
+      else if(alu_op_reg==6'd45)
+	   exu_csr_op = 3'd5;
+      else
+	   exu_csr_op = 3'd0;   
+end
+
+
+always @(*) begin
+   jump_pc       = 32'b0;
+   exu_rd_wr     = 32'b0;
+   csr_wr        = 32'b0;
+   exu_mem_waddr = 32'b0;
+   exu_mem_raddr = 32'b0;
    system_flag   = 1'b0 ;
 
    case(alu_op_reg)
@@ -306,15 +346,15 @@ always @(*) begin
 	 6'd17:exu_mem_raddr = exu_rs1 + imm_reg ; //lb 
          6'd18:exu_mem_raddr = exu_rs1 + imm_reg ; //lw 
          6'd19:exu_mem_raddr = exu_rs1 + imm_reg ; //lbu 
-	 6'd20:exu_mem_waddr = exu_rs1 + imm_reg ; //sw     
-	 6'd21:exu_mem_waddr = exu_rs1 + imm_reg ; //sb 
+	 6'd20:exu_mem_waddr = exu_rs1 + imm_reg ; //sb     
+	 6'd21:exu_mem_waddr = exu_rs1 + imm_reg ; //sw 
 	 6'd22: begin  //jal
                  exu_rd_wr = exu_curr_pc + 4;  //pc + 4
                  jump_pc = exu_curr_pc + imm_reg; 
 	     end
 	 6'd23: begin  //jalr
                  exu_rd_wr = exu_curr_pc + 4;  //pc + 4
-                 jump_pc = (exu_rs1 + imm_reg)&32'hfffffffc; 
+                 jump_pc   = (exu_rs1 + imm_reg)&~1; 
 	     end
 	 6'd24: system_flag = exu_break_flag; //ebreak  
 	 6'd25: begin  //beq
@@ -363,14 +403,30 @@ always @(*) begin
 	 6'd37: exu_rd_wr = exu_rs1 | exu_rs2 ; //or
 	 6'd38:begin  
 	        exu_rd_wr = csr_rd ;  //csrrw
-		csr_wr= exu_rs1 ; 
+		csr_wr = exu_rs1 ; 
                 end
          6'd39:begin
 		exu_rd_wr = csr_rd ;  //csrrs
-                csr_wr= csr_rd | exu_rs1 ;
+                csr_wr = csr_rd | exu_rs1 ;
 	       end
 	 6'd40: system_flag = exu_ecall_flag; //ecall
-	 6'd41: system_flag = exu_mret_flag;  //mret 	 
+	 6'd41: system_flag = exu_mret_flag;  //mret
+	 6'd42:begin                  
+                exu_rd_wr = csr_rd;   //csrrwi
+                csr_wr = exu_zimm;
+	       end
+         6'd43:begin                  //csrrsi
+                exu_rd_wr = csr_rd;
+                csr_wr = csr_rd | exu_zimm;
+	       end
+         6'd44:begin
+                exu_rd_wr = csr_rd;   //csrrc
+                csr_wr = csr_rd & ~exu_rs1;  
+	       end
+         6'd45:begin
+                exu_rd_wr = csr_rd;   //csrrci
+                csr_wr = csr_rd & ~exu_zimm;
+	       end		 
        default:begin
                 exu_rd_wr     = 32'h0;
 		csr_wr        = 32'h0;
